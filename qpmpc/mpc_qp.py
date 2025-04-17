@@ -88,13 +88,13 @@ class MPCQP:
         Phi = np.vstack(phi_list, dtype=float)
         Psi = np.vstack(psi_list, dtype=float)
 
-        P: np.ndarray = mpc_problem.stage_input_cost_weight * np.eye(
-            stacked_input_dim,
-        )
+        P: np.ndarray = np.kron(np.eye(mpc_problem.nb_timesteps), mpc_problem.stage_input_cost_weight)
+
         if mpc_problem.terminal_cost_weight is not None:
-            P += mpc_problem.terminal_cost_weight * np.dot(psi.T, psi)
+            P += psi.T@np.kron(np.eye(mpc_problem.nb_timesteps),mpc_problem.terminal_cost_weight)@psi
+
         if mpc_problem.stage_state_cost_weight is not None:
-            P += mpc_problem.stage_state_cost_weight * np.dot(Psi.T, Psi)
+            P += Psi.T@np.kron(np.eye(mpc_problem.nb_timesteps),mpc_problem.stage_state_cost_weight)@Psi
         q: np.ndarray = np.zeros(stacked_input_dim)
 
         self.G = csc_matrix(G) if sparse else G
@@ -127,16 +127,14 @@ class MPCQP:
             raise ProblemDefinitionError("initial state is undefined")
         initial_state = mpc_problem.initial_state
         self.q[:] = 0.0
+
         if mpc_problem.has_terminal_cost:
             c = np.dot(self.phi_last, initial_state) - mpc_problem.goal_state
-            self.q += mpc_problem.terminal_cost_weight * np.dot(
-                c.T, self.psi_last
-            )
+            self.q += c@np.kron(np.eye(mpc_problem.nb_timesteps),mpc_problem.terminal_cost_weight)  @self.psi_last
+
         if mpc_problem.has_stage_state_cost:
             c = np.dot(self.Phi, initial_state) - mpc_problem.target_states
-            self.q += mpc_problem.stage_state_cost_weight * np.dot(
-                c.T, self.Psi
-            )
+            self.q += c@ np.kron(np.eye(mpc_problem.nb_timesteps),mpc_problem.stage_state_cost_weight) @self.Psi
 
     def update_constraint_vector(self, mpc_problem: MPCProblem) -> None:
         """Update the inequality constraint vector.

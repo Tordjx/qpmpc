@@ -77,11 +77,11 @@ class MPCProblem:
     initial_state: Optional[np.ndarray]
     input_dim: int
     nb_timesteps: int
-    stage_input_cost_weight: float
-    stage_state_cost_weight: Optional[float]
+    stage_input_cost_weight: np.ndarray
+    stage_state_cost_weight: Optional[np.ndarray]
     state_dim: int
     target_states: Optional[np.ndarray]
-    terminal_cost_weight: Optional[float]
+    terminal_cost_weight: Optional[np.ndarray]
     transition_input_matrix: Union[np.ndarray, List[np.ndarray]]
     transition_state_matrix: Union[np.ndarray, List[np.ndarray]]
 
@@ -93,22 +93,30 @@ class MPCProblem:
         ineq_input_matrix: Union[None, np.ndarray, List[np.ndarray]],
         ineq_vector: Union[np.ndarray, List[np.ndarray]],
         nb_timesteps: int,
-        terminal_cost_weight: Optional[float],
-        stage_state_cost_weight: Optional[float],
-        stage_input_cost_weight: float,
+        terminal_cost_weight: Optional[np.ndarray],
+        stage_state_cost_weight: Optional[np.ndarray],
+        stage_input_cost_weight: np.ndarray,
         initial_state: Optional[np.ndarray] = None,
         goal_state: Optional[np.ndarray] = None,
         target_states: Optional[np.ndarray] = None,
     ) -> None:
         """Start a new model predictive control problem."""
-        if stage_input_cost_weight <= 0.0:
-            raise ProblemDefinitionError(
-                "stage non-negative control weight needed for regularization"
-            )
-        if terminal_cost_weight is None and stage_state_cost_weight is None:
+        if terminal_cost_weight is not None : 
+            nx = terminal_cost_weight.shape[0]
+            if not (terminal_cost_weight.shape[0] == nx and terminal_cost_weight.shape[1] == nx):
+                raise Exception("terminal_cost_weight", terminal_cost_weight.shape, (nx, nx))
+        elif stage_state_cost_weight is not None:
+            nx = stage_state_cost_weight.shape[0]
+            if not (stage_state_cost_weight.shape[0] == nx and stage_state_cost_weight.shape[1] == nx):
+                raise Exception("stage_state_cost_weight", stage_state_cost_weight.shape, (nx, nx))
+        else:
             raise ProblemDefinitionError(
                 "either terminal or stage state cost should be set"
             )
+        nu = stage_input_cost_weight.shape[0]
+        if not (stage_input_cost_weight.shape[0] == nu and stage_input_cost_weight.shape[1] == nu):
+            raise Exception("stage_input_cost_weight", stage_input_cost_weight.shape, (nu, nu))
+
         input_dim = (
             transition_input_matrix.shape[1]
             if isinstance(transition_input_matrix, np.ndarray)
@@ -143,7 +151,6 @@ class MPCProblem:
         """Check whether the problem has a terminal cost."""
         cost_is_set = (
             self.terminal_cost_weight is not None
-            and self.terminal_cost_weight > 1e-10
         )
         if cost_is_set and self.goal_state is None:
             raise ProblemDefinitionError(
@@ -156,7 +163,6 @@ class MPCProblem:
         """Check whether the problem has a stage state cost."""
         cost_is_set = (
             self.stage_state_cost_weight is not None
-            and self.stage_state_cost_weight > 1e-10
         )
         if cost_is_set and self.target_states is None:
             raise ProblemDefinitionError(
