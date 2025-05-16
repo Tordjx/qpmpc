@@ -59,6 +59,13 @@ class MPCQP:
             C_k = mpc_problem.get_ineq_state_matrix(k)
             D_k = mpc_problem.get_ineq_input_matrix(k)
             e_k = mpc_problem.get_ineq_vector(k)
+            if k == mpc_problem.nb_timesteps -1 :
+                term_C_k = mpc_problem.get_terminal_ineq_state_matrix(k)
+                term_D_k = mpc_problem.get_terminal_ineq_input_matrix(k)
+                term_e_k = mpc_problem.get_terminal_ineq_vector(k)
+                C_k = np.concatenate((C_k,term_C_k))
+                D_k = np.concatenate((D_k,term_D_k))
+                e_k = np.concatenate((e_k,term_e_k))
             G_k = np.zeros((e_k.shape[0], stacked_input_dim))
             h_k = (
                 e_k
@@ -83,6 +90,7 @@ class MPCQP:
             phi = A_k.dot(phi)
             psi = A_k.dot(psi)
             psi[:, input_slice] = B_k
+        
         G: np.ndarray = np.vstack(G_list, dtype=float)
         h: np.ndarray = np.hstack(h_list, dtype=float)
         Phi = np.vstack(phi_list, dtype=float)
