@@ -124,6 +124,7 @@ class MPCQP:
         """Get quadratic program to call a QP solver."""
         return qpsolvers.Problem(self.P, self.q, self.G, self.h)
 
+
     def update_cost_vector(self, mpc_problem: MPCProblem) -> None:
         """Update the gradient vector in the cost function.
 
@@ -135,22 +136,65 @@ class MPCQP:
             raise ProblemDefinitionError("initial state is undefined")
         initial_state = mpc_problem.initial_state
         self.q[:] = 0.0
-
-        if mpc_problem.has_terminal_cost:
-            c = np.dot(self.phi_last, initial_state) - mpc_problem.goal_state
-            self.q += c@np.kron(np.eye(mpc_problem.nb_timesteps),mpc_problem.terminal_cost_weight)  @self.psi_last
-
+        """
         if mpc_problem.has_stage_state_cost:
             c = np.dot(self.Phi, initial_state) - mpc_problem.target_states
-            self.q += c@ np.kron(np.eye(mpc_problem.nb_timesteps),mpc_problem.stage_state_cost_weight) @self.Psi
+            weights = np.tile(mpc_problem.stage_state_cost_weight_vector, mpc_problem.horizon_length)
+            weighted_c = weights * c  # Element-wise multiplication
+            self.q += np.dot(weighted_c.T, self.Psi)"""
+        if mpc_problem.has_stage_state_cost:
+            W_x = np.kron(np.eye(mpc_problem.nb_timesteps), mpc_problem.stage_state_cost_weight)   
+            c = np.dot(self.Phi, initial_state) - mpc_problem.target_states  # shape: (N * nx,)
+            self.q += np.dot(np.dot(c.T, W_x), self.Psi)
+
 
     def update_constraint_vector(self, mpc_problem: MPCProblem) -> None:
-        """Update the inequality constraint vector.
+        """Update the inequality constraint vector `h`.
 
         Args:
-            mpc_problem: New model predictive control problem. It should have
-                the same structure as the one used to initialize the MPCQP.
+            mpc_problem: Updated MPC problem with a new initial state.
         """
-        raise NotImplementedError(
-            "Time-varying constraints are handled cold-start for now"
-        )
+        if mpc_problem.initial_state is None:
+            raise ProblemDefinitionError("initial state is undefined")
+
+
+        initial_state: np.ndarray = mpc_problem.initial_state
+        input_dim = mpc_problem.input_dim
+        nb_timesteps = mpc_problem.nb_timesteps
+
+        h_list = []
+        phi = np.eye(mpc_problem.state_dim)
+        psi = np.zeros((mpc_problem.state_dim, input_dim * nb_timesteps))
+
+        for k in range(nb_timesteps):
+            A_k = mpc_problem.get_transition_state_matrix(k)
+            B_k = mpc_problem.get_transition_input_matrix(k)
+            C_k = mpc_problem.get_ineq_state_matrix(k)
+            D_k = mpc_problem.get_ineq_input_matrix(k)
+            e_k = mpc_problem.get_ineq_vector(k)
+
+            if k == nb_timesteps - 1:
+                term_C_k = mpc_problem.get_terminal_ineq_state_matrix(k)
+                term_D_k = mpc_problem.get_terminal_ineq_input_matrix(k)
+                term_e_k = mpc_problem.get_terminal_ineq_vector(k)
+                if term_C_k is not None:
+                    C_k = np.concatenate((C_k, term_C_k)) if C_k is not None else term_C_k
+                if term_D_k is not None:
+                    D_k = np.concatenate((D_k, term_D_k)) if D_k is not None else term_D_k
+                if term_e_k is not None:
+                    e_k = np.concatenate((e_k, term_e_k)) if e_k is not None else term_e_k
+
+            if C_k is None:
+                h_k = e_k
+            else:
+                h_k = e_k - C_k.dot(phi).dot(initial_state)
+
+            h_list.append(h_k)
+
+            # propagate phi and psi forward
+            phi = A_k @ phi
+            psi = A_k @ psi
+            input_slice = slice(k * input_dim, (k + 1) * input_dim)
+            psi[:, input_slice] = B_k
+
+        self.h = np.hstack(h_list)
