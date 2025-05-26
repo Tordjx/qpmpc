@@ -74,6 +74,9 @@ class MPCProblem:
     ineq_input_matrix: Union[None, np.ndarray, List[np.ndarray]]
     ineq_state_matrix: Union[None, np.ndarray, List[np.ndarray]]
     ineq_vector: Union[np.ndarray, List[np.ndarray]]
+    terminal_ineq_input_matrix: Union[None, np.ndarray, List[np.ndarray]]
+    terminal_ineq_state_matrix: Union[None, np.ndarray, List[np.ndarray]]
+    terminal_ineq_vector: Union[None, np.ndarray, List[np.ndarray]]
     initial_state: Optional[np.ndarray]
     input_dim: int
     nb_timesteps: int
@@ -92,6 +95,9 @@ class MPCProblem:
         ineq_state_matrix: Union[None, np.ndarray, List[np.ndarray]],
         ineq_input_matrix: Union[None, np.ndarray, List[np.ndarray]],
         ineq_vector: Union[np.ndarray, List[np.ndarray]],
+        terminal_ineq_state_matrix: Union[None, np.ndarray, List[np.ndarray]],
+        terminal_ineq_input_matrix: Union[None, np.ndarray, List[np.ndarray]],
+        terminal_ineq_vector: Union[None, np.ndarray, List[np.ndarray]],
         nb_timesteps: int,
         terminal_cost_weight: Optional[float],
         stage_state_cost_weight: Optional[float],
@@ -123,6 +129,9 @@ class MPCProblem:
         self.ineq_input_matrix = ineq_input_matrix
         self.ineq_state_matrix = ineq_state_matrix
         self.ineq_vector = ineq_vector
+        self.terminal_ineq_input_matrix = terminal_ineq_input_matrix
+        self.terminal_ineq_state_matrix = terminal_ineq_state_matrix
+        self.terminal_ineq_vector = terminal_ineq_vector
         self.initial_state = None  # initialized below
         self.input_dim = input_dim
         self.nb_timesteps = nb_timesteps
@@ -244,6 +253,55 @@ class MPCProblem:
             else self.ineq_vector
         )
 
+    def get_terminal_ineq_state_matrix(
+        self, k
+    ) -> Union[None, np.ndarray, List[np.ndarray]]:
+        """Get terminal state inequality matrix at a given timestep.
+
+        Args:
+            k: Index of the timestep.
+
+        Returns:
+            State inequality matrix at that step.
+        """
+        return (
+            self.ineq_state_matrix[k]
+            if isinstance(self.ineq_state_matrix, list)
+            else self.ineq_state_matrix
+        )
+
+    def get_terminal_ineq_input_matrix(
+        self, k
+    ) -> Union[None, np.ndarray, List[np.ndarray]]:
+        """Get terminal input inequality matrix at a given timestep.
+
+        Args:
+            k: Index of the timestep.
+
+        Returns:
+            Input inequality matrix at that step.
+        """
+        return (
+            self.ineq_input_matrix[k]
+            if isinstance(self.ineq_input_matrix, list)
+            else self.ineq_input_matrix
+        )
+
+    def get_terminal_ineq_vector(self, k) -> Union[None, np.ndarray]:
+        """Get terminal inequality vector at a given timestep.
+
+        Args:
+            k: Index of the timestep.
+
+        Returns:
+            Inequality vector at that step.
+        """
+        return (
+            self.ineq_vector[k]
+            if isinstance(self.ineq_vector, list)
+            else self.ineq_vector
+        )
+    
     def update_goal_state(self, goal_state: np.ndarray) -> None:
         """Set the goal state.
 

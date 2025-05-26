@@ -90,6 +90,27 @@ class MPCQP:
             psi[:, input_slice] = B_k
             e_list.append(e_k)
             C_list.append(C_k)
+        #Adding terminal constraints
+        if e_term is not None :
+            C_term = mpc_problem.get_ineq_state_matrix(k)
+            D_term = mpc_problem.get_ineq_input_matrix(k)
+            e_term = mpc_problem.get_ineq_vector(k)
+            G_term = np.zeros((e_term.shape[0], stacked_input_dim))
+            h_term = (
+                e_term
+                if C_term is None
+                else e_term - np.dot(C_term.dot(phi), initial_state)  # type: ignore
+            )
+            input_slice = slice(k * input_dim, (k + 1) * input_dim)
+            if D_term is not None:
+                # we rely on G == 0 to avoid a slower +=
+                G_term[:, input_slice] = D_term
+            if C_term is not None:
+                G_term += C_term.dot(psi)  # type: ignore
+            G_list.append(G_term)
+            h_list.append(h_term)
+            e_list.append(e_term)
+            C_list.append(C_term)
         G: np.ndarray = np.vstack(G_list, dtype=float)
         h: np.ndarray = np.hstack(h_list, dtype=float)
         Phi = np.vstack(phi_list, dtype=float)
