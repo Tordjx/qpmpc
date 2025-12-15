@@ -122,6 +122,8 @@ class MPCQP:
         self.q = q  # initialized below
         self.e = e
         self.C = C
+        self.W_x_stage = np.kron(np.eye(mpc_problem.nb_timesteps), mpc_problem.stage_state_cost_weight)   
+        self.CPhi = self.C@self.Phi
         #
         try:
             self.update_cost_vector(mpc_problem)
@@ -133,7 +135,7 @@ class MPCQP:
         """Get quadratic program to call a QP solver."""
         return qpsolvers.Problem(self.P, self.q, self.G, self.h)
 
-
+    
     def update_cost_vector(self, mpc_problem: MPCProblem) -> None:
         """Update the gradient vector in the cost function.
 
@@ -145,22 +147,19 @@ class MPCQP:
             raise ProblemDefinitionError("initial state is undefined")
         initial_state = mpc_problem.initial_state
         self.q[:] = 0.0
-        """
         if mpc_problem.has_stage_state_cost:
-            c = np.dot(self.Phi, initial_state) - mpc_problem.target_states
-            weights = np.tile(mpc_problem.stage_state_cost_weight_vector, mpc_problem.horizon_length)
-            weighted_c = weights * c  # Element-wise multiplication
-            self.q += np.dot(weighted_c.T, self.Psi)"""
-        if mpc_problem.has_stage_state_cost:
-            W_x = np.kron(np.eye(mpc_problem.nb_timesteps), mpc_problem.stage_state_cost_weight)   
+            #W_x = np.kron(np.eye(mpc_problem.nb_timesteps), mpc_problem.stage_state_cost_weight)   
+            n= len(mpc_problem.stage_state_cost_weight)
+            for i in range(mpc_problem.nb_timesteps):
+                self.W_x_stage[i*n:(i+1)*n,i*n:(i+1)*n ]= mpc_problem.stage_state_cost_weight
             c = np.dot(self.Phi, initial_state) - mpc_problem.target_states  # shape: (N * nx,)
-            self.q += np.dot(np.dot(c.T, W_x), self.Psi)
+            self.q += np.dot(np.dot(c.T, self.W_x_stage), self.Psi)
         if mpc_problem.has_terminal_cost:
             W_x = mpc_problem.terminal_cost_weight
             c = np.dot(self.phi_last, initial_state) - mpc_problem.goal_state
             self.q += np.dot(c.T, W_x).dot(self.psi_last)
 
-
+    @profile
     def update_constraint_vector(self, mpc_problem: MPCProblem) -> None:
         """Update the inequality constraint vector `h`.
 
@@ -171,5 +170,5 @@ class MPCQP:
         if mpc_problem.initial_state is None:
             raise ProblemDefinitionError("initial state is undefined")
         if self.C is not None:
-            h= self.e - self.C@self.Phi@mpc_problem.initial_state
+            h= self.e - self.CPhi@mpc_problem.initial_state
             self.h = h.flatten()
