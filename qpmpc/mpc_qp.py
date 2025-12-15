@@ -105,8 +105,8 @@ class MPCQP:
         e = np.hstack(e_list, dtype=float)
         P: np.ndarray = np.kron(np.eye(mpc_problem.nb_timesteps), mpc_problem.stage_input_cost_weight)
 
-        if mpc_problem.terminal_cost_weight is not None:
-            P += psi.T@np.kron(np.eye(mpc_problem.nb_timesteps),mpc_problem.terminal_cost_weight)@psi
+        if mpc_problem.terminal_cost_weight is not None: 
+            P += psi.T@mpc_problem.terminal_cost_weight@psi
 
         if mpc_problem.stage_state_cost_weight is not None:
             P += Psi.T@np.kron(np.eye(mpc_problem.nb_timesteps),mpc_problem.stage_state_cost_weight)@Psi
@@ -155,6 +155,10 @@ class MPCQP:
             W_x = np.kron(np.eye(mpc_problem.nb_timesteps), mpc_problem.stage_state_cost_weight)   
             c = np.dot(self.Phi, initial_state) - mpc_problem.target_states  # shape: (N * nx,)
             self.q += np.dot(np.dot(c.T, W_x), self.Psi)
+        if mpc_problem.has_terminal_cost:
+            W_x = mpc_problem.terminal_cost_weight
+            c = np.dot(self.phi_last, initial_state) - mpc_problem.goal_state
+            self.q += np.dot(c.T, W_x).dot(self.psi_last)
 
 
     def update_constraint_vector(self, mpc_problem: MPCProblem) -> None:
