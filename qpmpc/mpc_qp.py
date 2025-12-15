@@ -159,7 +159,6 @@ class MPCQP:
             c = np.dot(self.phi_last, initial_state) - mpc_problem.goal_state
             self.q += np.dot(c.T, W_x).dot(self.psi_last)
 
-    @profile
     def update_constraint_vector(self, mpc_problem: MPCProblem) -> None:
         """Update the inequality constraint vector `h`.
 
