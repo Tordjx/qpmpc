@@ -320,7 +320,7 @@ class MPCProblem:
                 f"goal state of shape {goal_state.shape} "
                 f"does not match state dimension ({self.state_dim})"
             )
-        self.goal_state = goal_state.flatten()
+        self.goal_state = goal_state.reshape(-1)
 
     def update_initial_state(self, initial_state: np.ndarray) -> None:
         """Set the initial state.
@@ -336,7 +336,7 @@ class MPCProblem:
                 f"Initial state of shape {initial_state.shape} "
                 f"does not match state dimension ({self.state_dim})"
             )
-        self.initial_state = initial_state.flatten()
+        self.initial_state = initial_state.reshape(-1)
 
     def update_target_states(self, target_states: np.ndarray) -> None:
         """Set the reference state trajectory to track.
@@ -354,7 +354,7 @@ class MPCProblem:
                 f"{self.nb_timesteps} * {self.state_dim} = "
                 f"{self.nb_timesteps * self.state_dim}"
             )
-        self.target_states = target_states.flatten()
+        self.target_states = target_states.reshape(-1)
 
     def __repr__(self) -> str:
         """String representation of the MPC problem."""

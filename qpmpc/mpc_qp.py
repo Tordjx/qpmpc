@@ -124,6 +124,8 @@ class MPCQP:
         self.C = C
         self.W_x_stage = np.kron(np.eye(mpc_problem.nb_timesteps), mpc_problem.stage_state_cost_weight)   
         self.CPhi = self.C@self.Phi
+        self.Phi_blocks = phi_list
+        self.Psi_blocks = psi_list
         #
         try:
             self.update_cost_vector(mpc_problem)
@@ -135,29 +137,33 @@ class MPCQP:
         """Get quadratic program to call a QP solver."""
         return qpsolvers.Problem(self.P, self.q, self.G, self.h)
 
-    
     def update_cost_vector(self, mpc_problem: MPCProblem) -> None:
-        """Update the gradient vector in the cost function.
-
-        Args:
-            mpc_problem: New model predictive control problem. It should have
-                the same structure as the one used to initialize the MPCQP.
-        """
         if mpc_problem.initial_state is None:
             raise ProblemDefinitionError("initial state is undefined")
-        initial_state = mpc_problem.initial_state
+
+        x0 = mpc_problem.initial_state
         self.q[:] = 0.0
+
+        # ===== Stage cost =====
         if mpc_problem.has_stage_state_cost:
-            #W_x = np.kron(np.eye(mpc_problem.nb_timesteps), mpc_problem.stage_state_cost_weight)   
-            n= len(mpc_problem.stage_state_cost_weight)
-            for i in range(mpc_problem.nb_timesteps):
-                self.W_x_stage[i*n:(i+1)*n,i*n:(i+1)*n ]= mpc_problem.stage_state_cost_weight
-            c = np.dot(self.Phi, initial_state) - mpc_problem.target_states  # shape: (N * nx,)
-            self.q += np.dot(np.dot(c.T, self.W_x_stage), self.Psi)
+            Q = mpc_problem.stage_state_cost_weight
+            x_star = mpc_problem.target_states
+
+            nx = mpc_problem.state_dim
+
+            for k in range(mpc_problem.nb_timesteps):
+                Phi_k = self.Phi_blocks[k]
+                Psi_k = self.Psi_blocks[k]
+
+
+                ck = Phi_k @ x0 - x_star[k]
+                self.q += Psi_k.T @ (Q @ ck)
+
+
+        # ===== Terminal cost =====
         if mpc_problem.has_terminal_cost:
-            W_x = mpc_problem.terminal_cost_weight
-            c = np.dot(self.phi_last, initial_state) - mpc_problem.goal_state
-            self.q += np.dot(c.T, W_x).dot(self.psi_last)
+            cT = self.phi_last @ x0 - mpc_problem.goal_state
+            self.q += self.psi_last.T @ (mpc_problem.terminal_cost_weight @ cT)
 
     def update_constraint_vector(self, mpc_problem: MPCProblem) -> None:
         """Update the inequality constraint vector `h`.
