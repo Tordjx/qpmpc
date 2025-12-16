@@ -122,10 +122,7 @@ class MPCQP:
         self.q = q  # initialized below
         self.e = e
         self.C = C
-        self.W_x_stage = np.kron(np.eye(mpc_problem.nb_timesteps), mpc_problem.stage_state_cost_weight)   
         self.CPhi = self.C@self.Phi
-        self.Phi_blocks = phi_list
-        self.Psi_blocks = psi_list
         #
         try:
             self.update_cost_vector(mpc_problem)
@@ -136,14 +133,13 @@ class MPCQP:
     def problem(self) -> qpsolvers.Problem:
         """Get quadratic program to call a QP solver."""
         return qpsolvers.Problem(self.P, self.q, self.G, self.h)
-
+    
     def update_cost_vector(self, mpc_problem: MPCProblem) -> None:
         if mpc_problem.initial_state is None:
             raise ProblemDefinitionError("initial state is undefined")
 
         x0 = mpc_problem.initial_state
         self.q[:] = 0.0
-
         # ===== Stage cost =====
         if mpc_problem.has_stage_state_cost:
             Q = mpc_problem.stage_state_cost_weight
@@ -151,13 +147,16 @@ class MPCQP:
 
             nx = mpc_problem.state_dim
 
-            for k in range(mpc_problem.nb_timesteps):
-                Phi_k = self.Phi_blocks[k]
-                Psi_k = self.Psi_blocks[k]
+                        
+            err = self.Phi @ x0 - x_star.reshape(-1)     # (N*nx,)
+            err = err.reshape(-1, nx)                # (N, nx)
 
+            # Apply Q to each stage (no block-diag)
+            Qerr = err @ Q.T                        # (N, nx)
+            Qerr = Qerr.reshape(-1)                 # (N*nx,)
 
-                ck = Phi_k @ x0 - x_star[k]
-                self.q += Psi_k.T @ (Q @ ck)
+            self.q = self.Psi.T @ Qerr                   # (N*nu,)
+
 
 
         # ===== Terminal cost =====
