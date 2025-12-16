@@ -164,7 +164,7 @@ class MPCQP:
         if mpc_problem.has_terminal_cost:
             cT = self.phi_last @ x0 - mpc_problem.goal_state
             self.q += self.psi_last.T @ (mpc_problem.terminal_cost_weight @ cT)
-            
+    
     def update_constraint_vector(self, mpc_problem: MPCProblem) -> None:
         """Update the inequality constraint vector `h`.
 
@@ -176,4 +176,4 @@ class MPCQP:
             raise ProblemDefinitionError("initial state is undefined")
         if self.C is not None:
             h= self.e - self.CPhi@mpc_problem.initial_state
-            self.h = h.flatten()
+            self.h = h.reshape(-1)
