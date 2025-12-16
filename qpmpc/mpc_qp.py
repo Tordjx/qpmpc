@@ -123,6 +123,7 @@ class MPCQP:
         self.e = e
         self.C = C
         self.CPhi = self.C@self.Phi
+        self.PsiT = self.Psi.T
         #
         try:
             self.update_cost_vector(mpc_problem)
@@ -155,7 +156,7 @@ class MPCQP:
             Qerr = err @ Q.T                        # (N, nx)
             Qerr = Qerr.reshape(-1)                 # (N*nx,)
 
-            self.q = self.Psi.T @ Qerr                   # (N*nu,)
+            self.q[:] = self.PsiT @ Qerr                   # (N*nu,)
 
 
 
@@ -163,7 +164,7 @@ class MPCQP:
         if mpc_problem.has_terminal_cost:
             cT = self.phi_last @ x0 - mpc_problem.goal_state
             self.q += self.psi_last.T @ (mpc_problem.terminal_cost_weight @ cT)
-
+            
     def update_constraint_vector(self, mpc_problem: MPCProblem) -> None:
         """Update the inequality constraint vector `h`.
 
