@@ -39,6 +39,7 @@ class MPCQP:
             mpc_problem: Model predictive control problem to cast as a QP.
             sparse: If set, use sparse matrix representation.
         """
+        
         input_dim = mpc_problem.input_dim
         state_dim = mpc_problem.state_dim
         stacked_input_dim = mpc_problem.input_dim * mpc_problem.nb_timesteps
@@ -126,7 +127,7 @@ class MPCQP:
         self.PsiT = self.Psi.T
         #
         try:
-            self.update_cost_vector(mpc_problem)
+            self.update_cost_vector(mpc_problem, sparse)
         except ProblemDefinitionError:
             pass
 
@@ -177,3 +178,100 @@ class MPCQP:
         if self.C is not None:
             h= self.e - self.CPhi@mpc_problem.initial_state
             self.h = h.reshape(-1)
+        
+    def update_dynamics(self, mpc_problem: MPCProblem) -> None:
+
+        if mpc_problem.initial_state is None:
+            raise ProblemDefinitionError("initial state is undefined")
+
+        x0 = mpc_problem.initial_state
+
+        N  = mpc_problem.nb_timesteps
+        nx = mpc_problem.state_dim
+        nu = mpc_problem.input_dim
+        stacked_u = N * nu
+
+        # Working variables
+        phi = np.eye(nx)
+        psi = np.zeros((nx, stacked_u))
+
+        row_G = 0  # running row index in G / h / e
+
+        for k in range(N):
+
+            # ------------------------
+            # Write Phi / Psi blocks
+            # ------------------------
+
+            xs = slice(k * nx, (k + 1) * nx)
+            self.Phi[xs, :] = phi
+            self.Psi[xs, :] = psi
+
+            # ------------------------
+            # Constraints at stage k
+            # ------------------------
+
+            Ck = mpc_problem.get_ineq_state_matrix(k)
+            Dk = mpc_problem.get_ineq_input_matrix(k)
+            ek = mpc_problem.get_ineq_vector(k)
+
+            # terminal constraints
+            if k == N - 1:
+                Ct = mpc_problem.get_terminal_ineq_state_matrix(k)
+                Dt = mpc_problem.get_terminal_ineq_input_matrix(k)
+                et = mpc_problem.get_terminal_ineq_vector(k)
+
+                if Ct is not None:
+                    Ck = np.concatenate((Ck, Ct)) if Ck is not None else Ct
+                if Dt is not None:
+                    Dk = np.concatenate((Dk, Dt)) if Dk is not None else Dt
+                if et is not None:
+                    ek = np.concatenate((ek, et))
+
+            if ek is not None:
+                m = ek.shape[0]
+                rows = slice(row_G, row_G + m)
+
+                # e and h
+                self.e[rows] = ek
+                if Ck is None:
+                    self.h[rows] = ek
+                else:
+                    self.h[rows] = ek - Ck @ phi @ x0
+
+                # G block
+                self.G[rows, :] = 0.0
+
+                us = slice(k * nu, (k + 1) * nu)
+                if Dk is not None:
+                    self.G[rows, us] = Dk
+
+                if Ck is not None:
+                    self.G[rows, :] += Ck @ psi
+
+                row_G += m
+
+            # ------------------------
+            # Dynamics propagation
+            # ------------------------
+
+            A_k = mpc_problem.get_transition_state_matrix(k)
+            B_k = mpc_problem.get_transition_input_matrix(k)
+
+            phi = A_k @ phi
+            psi = A_k @ psi
+            psi[:, k * nu:(k + 1) * nu] = B_k
+
+        # ------------------------
+        # Terminal maps
+        # ------------------------
+
+        self.phi_last[:] = phi
+        self.psi_last[:] = psi
+
+        # ------------------------
+        # Precompute C Phi
+        # ------------------------
+
+        if self.C is not None:
+            self.CPhi[:] = self.C @ self.Phi
